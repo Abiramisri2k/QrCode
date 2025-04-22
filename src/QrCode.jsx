@@ -346,7 +346,7 @@ export default function QRCodeGenerator() {
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen p-6 flex items-center justify-center overflow-hidden">
+    <div className="bg-gray-100 min-h-screen p-6 flex items-center justify-center">
       <div className="bg-white p-8 rounded-lg shadow-sm max-w-6xl w-full">
         <div className="flex flex-col md:flex-row gap-8">
           <div className="md:w-1/2">
