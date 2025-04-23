@@ -24,6 +24,7 @@ export default function QRCodeGenerator() {
   const [newQrGenerated, setNewQrGenerated] = useState(false);
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const fileInputRef = useRef(null);
+  const downloadOptionsRef = useRef(null);
 
   const qualityMap = {
     low: 600,
@@ -41,6 +42,31 @@ export default function QRCodeGenerator() {
     }
   }, [url, logo, newQrGenerated]);
 
+  useEffect(() => {
+    // Only add the event listener if the dropdown is showing
+    if (showDownloadOptions) {
+      const handleClickOutside = (event) => {
+        // Check if we clicked outside the dropdown AND outside the button that opened it
+        if (
+          downloadOptionsRef.current && 
+          !downloadOptionsRef.current.contains(event.target) &&
+          // Make sure we're not clicking the button itself
+          !event.target.closest('button[data-download-btn="true"]')
+        ) {
+          setShowDownloadOptions(false);
+        }
+      };
+      
+      // Use mousedown instead of click for better UX
+      document.addEventListener('mousedown', handleClickOutside);
+      
+      // Cleanup function
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showDownloadOptions]);
+
   const generateDefaultQRCode = async () => {
     try {
       const qrOptions = {
@@ -55,14 +81,14 @@ export default function QRCodeGenerator() {
 
       // Generate PNG version
       const qrDataUrl = await QRCode.toDataURL(
-        "https://example.com/qr-generator",
+        "https://qr-code-pearl-xi.vercel.app/",
         qrOptions
       );
       setQrCode(qrDataUrl);
 
       // Generate SVG version
       const svgString = await QRCode.toString(
-        "https://example.com/qr-generator",
+        "https://qr-code-pearl-xi.vercel.app/",
         {
           type: "svg",
           color: {
@@ -122,7 +148,7 @@ export default function QRCodeGenerator() {
 
       try {
         const logoDataUrl = await readFileAsDataURL(file);
-        const urlToUse = url || "https://example.com/qr-generator";
+        const urlToUse = url || "https://qr-code-pearl-xi.vercel.app/";
         generateQRCodeWithLogo(urlToUse, logoDataUrl);
       } catch (error) {
         console.error("Logo processing error:", error);
@@ -142,11 +168,10 @@ export default function QRCodeGenerator() {
 
   const generateQRCodeWithLogo = async (contentToEncode, logoDataUrl) => {
     try {
-      // Make sure we have valid content
       if (!contentToEncode) {
-        contentToEncode = "https://example.com/qr-generator";
+        throw new Error("No URL provided");
       }
-
+      
       const qrOptions = {
         color: {
           dark: fillColor,
@@ -154,13 +179,11 @@ export default function QRCodeGenerator() {
         },
         width: qualityMap[quality] || qualityMap.medium,
         margin: 1,
-        errorCorrectionLevel: "H", // Add high error correction for logo
+        errorCorrectionLevel: "H",
       };
-
-      // Generate PNG version of QR code
+  
       const qrDataUrl = await QRCode.toDataURL(contentToEncode, qrOptions);
-
-      // Generate SVG version (for SVG download option)
+  
       const svgString = await QRCode.toString(contentToEncode, {
         type: "svg",
         color: {
@@ -171,26 +194,21 @@ export default function QRCodeGenerator() {
         margin: 1,
         errorCorrectionLevel: "H",
       });
-
-      // We cannot easily add the logo to SVG, so we'll handle that separately for display
+  
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
-
-      // Load QR code image
+  
       const qrImg = new Image();
       await new Promise((resolve, reject) => {
         qrImg.onload = resolve;
         qrImg.onerror = reject;
         qrImg.src = qrDataUrl;
       });
-
+  
       canvas.width = qrImg.width;
       canvas.height = qrImg.height;
-
-      // Draw QR code
       ctx.drawImage(qrImg, 0, 0);
-
-      // Load logo image
+  
       const logoImg = new Image();
       await new Promise((resolve, reject) => {
         logoImg.onload = resolve;
@@ -200,34 +218,39 @@ export default function QRCodeGenerator() {
         };
         logoImg.src = logoDataUrl;
       });
-
-      // Calculate logo size (15% of QR code - smaller than before)
-      const logoSize = qrImg.width * 0.15;
-      const logoX = (qrImg.width - logoSize) / 2;
-      const logoY = (qrImg.height - logoSize) / 2;
-
-      // Draw white background for logo with more padding
-      const logoPadding = qrImg.width * 0.02; // 2% padding
+  
+      const maxLogoSize = qrImg.width * 0.15;
+      const { naturalWidth, naturalHeight } = logoImg;
+  
+      // Maintain aspect ratio
+      let logoWidth = maxLogoSize;
+      let logoHeight = maxLogoSize;
+      if (naturalWidth > naturalHeight) {
+        logoHeight = (naturalHeight / naturalWidth) * maxLogoSize;
+      } else {
+        logoWidth = (naturalWidth / naturalHeight) * maxLogoSize;
+      }
+  
+      const logoX = (qrImg.width - logoWidth) / 2;
+      const logoY = (qrImg.height - logoHeight) / 2;
+      const logoPadding = qrImg.width * 0.02;
+  
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(
         logoX - logoPadding,
         logoY - logoPadding,
-        logoSize + logoPadding * 2,
-        logoSize + logoPadding * 2
+        logoWidth + logoPadding * 2,
+        logoHeight + logoPadding * 2
       );
-
-      // Draw logo
-      ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
-
-      // For display and PNG download, use the canvas with logo
+  
+      ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
+  
       const finalQrDataUrl = canvas.toDataURL();
       setQrCode(finalQrDataUrl);
-
-      // Store the raw SVG for SVG downloads (without logo)
       setQrCodeSvg(
         "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svgString)
       );
-
+  
       setNewQrGenerated(true);
       toast.success("QR code with logo created successfully");
     } catch (error) {
@@ -235,17 +258,27 @@ export default function QRCodeGenerator() {
       toast.error("Failed to generate QR code with logo");
     }
   };
-
+  
   const generateQRCode = async () => {
-    if (!url && !logo) {
-      generateDefaultQRCode();
+    const hasUrl = !!url.trim();
+    const hasLogo = !!logo;
+  
+    // If no URL but logo exists — show error
+    if (!hasUrl && hasLogo) {
+      toast.error("Please provide the URL");
       return;
     }
-
+  
+    // If both are missing — fallback to default
+    if (!hasUrl && !hasLogo) {
+      generateDefaultQRCode();
+      toast.error("Please provide the URL");
+      return;
+    }
+  
     try {
-      // Format and validate URL (will handle non-URL text too)
       const contentToEncode = validateAndFormatUrl(url);
-      
+  
       const qrOptions = {
         color: {
           dark: fillColor,
@@ -255,18 +288,17 @@ export default function QRCodeGenerator() {
         margin: 1,
         errorCorrectionLevel: "H", // Always use high error correction
       };
-
-      if (logo) {
+  
+      if (hasLogo) {
         const logoDataUrl = await readFileAsDataURL(logo);
         await generateQRCodeWithLogo(contentToEncode, logoDataUrl);
         return;
       }
-
-      // Generate PNG version
+  
+      // Generate QR without logo
       const qrDataUrl = await QRCode.toDataURL(contentToEncode, qrOptions);
       setQrCode(qrDataUrl);
-
-      // Generate SVG version
+  
       const svgString = await QRCode.toString(contentToEncode, {
         type: "svg",
         color: {
@@ -277,10 +309,11 @@ export default function QRCodeGenerator() {
         margin: 1,
         errorCorrectionLevel: "H",
       });
+  
       setQrCodeSvg(
         "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svgString)
       );
-
+  
       setNewQrGenerated(true);
     } catch (error) {
       console.error("QR code generation error:", error);
@@ -346,7 +379,7 @@ export default function QRCodeGenerator() {
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen p-6 flex items-center justify-center overflow-hidden">
+    <div className="bg-gray-100 min-h-screen p-6 flex items-center justify-center">
       <div className="bg-white p-8 rounded-lg shadow-sm max-w-6xl w-full">
         <div className="flex flex-col md:flex-row gap-8">
           <div className="md:w-1/2">
@@ -365,9 +398,6 @@ export default function QRCodeGenerator() {
                 value={url}
                 onChange={handleUrlChange}
               />
-              <p className="text-sm text-gray-500 mt-1">
-                Enter a URL or any text you want to encode
-              </p>
             </div>
 
             <div className="mb-6">
@@ -462,15 +492,19 @@ export default function QRCodeGenerator() {
               <Button
                 variant="outline"
                 className="w-full border border-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg hover:bg-gray-50 flex justify-center items-center"
-                disabled={!newQrGenerated}
-                onClick={() => setShowDownloadOptions((prev) => !prev)}
+                disabled={!newQrGenerated} 
+                onClick={() => {if (!url.trim()) {
+                  toast.error("Please provide the URL to enable download.");
+                  return;
+                } setShowDownloadOptions((prev) => !prev);
+              }}
               >
                 <Download className="mr-2 h-4 w-4" />
                 Download QR Code
               </Button>
 
               {showDownloadOptions && (
-                <div className="absolute mt-2 w-full rounded-lg shadow-lg bg-white border z-10">
+                <div  ref={downloadOptionsRef} className="absolute mt-2 w-full rounded-lg shadow-lg bg-white border z-10">
                   <button
                     className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-t-lg"
                     onClick={() => handleDownloadFormat("png")}
