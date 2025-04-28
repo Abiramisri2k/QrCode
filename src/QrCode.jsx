@@ -171,7 +171,7 @@ export default function QRCodeGenerator() {
       if (!contentToEncode) {
         throw new Error("No URL provided");
       }
-      
+
       const qrOptions = {
         color: {
           dark: fillColor,
@@ -181,9 +181,9 @@ export default function QRCodeGenerator() {
         margin: 1,
         errorCorrectionLevel: "H",
       };
-  
+
       const qrDataUrl = await QRCode.toDataURL(contentToEncode, qrOptions);
-  
+
       const svgString = await QRCode.toString(contentToEncode, {
         type: "svg",
         color: {
@@ -194,21 +194,21 @@ export default function QRCodeGenerator() {
         margin: 1,
         errorCorrectionLevel: "H",
       });
-  
+
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
-  
+
       const qrImg = new Image();
       await new Promise((resolve, reject) => {
         qrImg.onload = resolve;
         qrImg.onerror = reject;
         qrImg.src = qrDataUrl;
       });
-  
+
       canvas.width = qrImg.width;
       canvas.height = qrImg.height;
       ctx.drawImage(qrImg, 0, 0);
-  
+
       const logoImg = new Image();
       await new Promise((resolve, reject) => {
         logoImg.onload = resolve;
@@ -218,23 +218,24 @@ export default function QRCodeGenerator() {
         };
         logoImg.src = logoDataUrl;
       });
-  
-      const maxLogoSize = qrImg.width * 0.15;
-      const { naturalWidth, naturalHeight } = logoImg;
-  
-      // Maintain aspect ratio
-      let logoWidth = maxLogoSize;
-      let logoHeight = maxLogoSize;
-      if (naturalWidth > naturalHeight) {
-        logoHeight = (naturalHeight / naturalWidth) * maxLogoSize;
+
+      const maxLogoSize = qrImg.width * 0.40;
+      const aspectRatio = logoImg.naturalWidth / logoImg.naturalHeight;
+
+      let logoWidth, logoHeight;
+
+      if (aspectRatio >= 1) {
+        logoWidth = maxLogoSize;
+        logoHeight = maxLogoSize / aspectRatio;
       } else {
-        logoWidth = (naturalWidth / naturalHeight) * maxLogoSize;
+        logoHeight = maxLogoSize;
+        logoWidth = maxLogoSize * aspectRatio;
       }
-  
+
       const logoX = (qrImg.width - logoWidth) / 2;
       const logoY = (qrImg.height - logoHeight) / 2;
       const logoPadding = qrImg.width * 0.02;
-  
+
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(
         logoX - logoPadding,
@@ -242,15 +243,15 @@ export default function QRCodeGenerator() {
         logoWidth + logoPadding * 2,
         logoHeight + logoPadding * 2
       );
-  
+
       ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
-  
+
       const finalQrDataUrl = canvas.toDataURL();
       setQrCode(finalQrDataUrl);
       setQrCodeSvg(
         "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svgString)
       );
-  
+
       setNewQrGenerated(true);
       toast.success("QR code with logo created successfully");
     } catch (error) {
